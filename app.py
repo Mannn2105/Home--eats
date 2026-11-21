@@ -8,6 +8,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from flask import Flask, abort, flash, redirect, render_template, request, session, url_for
+from werkzeug.exceptions import HTTPException
 import razorpay
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -320,6 +321,8 @@ def verify_payment():
         return redirect(url_for(
             "receipt", order_id=order["id"], token=order["receipt_token"]
         ))
+    except HTTPException:
+        raise
     except razorpay.errors.SignatureVerificationError:
         abort(400, description="Payment signature verification failed.")
     except Exception:
