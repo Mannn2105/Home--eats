@@ -71,7 +71,7 @@ def add_to_cart(item_id):
     cart[key] = min(int(cart.get(key, 0)) + 1, 20)
     session["cart"] = cart
     flash("Added to your cart.")
-    return redirect(request.referrer or url_for("menu"))
+    return redirect(url_for("menu"))
 
 @app.route("/cart")
 def cart():
