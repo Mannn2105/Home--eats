@@ -42,7 +42,23 @@ HomeEats is a responsive, server-rendered food discovery and ordering demo built
    ```
 4. Open http://127.0.0.1:5000
 
-The SQLite database is created automatically as `homeeats.db` on first run.
+The SQLite database is created automatically at `data/homeeats.db` on first run. Set `DATA_DIR` to change its location.
+
+## Run tests
+
+Run the automated application tests with:
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+The suite covers page rendering, menu search, cart updates, checkout persistence, invalid input, CSRF rejection and the disabled-by-default admin route.
+
+## Production deployment
+
+The live demo is deployed on Railway: https://homeeats-web-production.up.railway.app
+
+The production service runs with Gunicorn. Its SQLite database directory is mounted to a persistent Railway volume at `/app/data`, so order records survive application redeployments. The app uses a generated `SECRET_KEY`, secure session-cookie settings and CSRF tokens for form submissions. The admin dashboard is disabled unless `ADMIN_PASSWORD` is explicitly configured.
 
 ## Admin dashboard
 
@@ -62,7 +78,7 @@ export SECRET_KEY="replace-with-a-long-random-secret"
 python app.py
 ```
 
-If `ADMIN_PASSWORD` is not configured, the admin dashboard remains disabled. Never commit real secrets to GitHub. For a public deployment, configure a strong `SECRET_KEY`, disable Flask debug mode, use HTTPS, and configure persistent storage for SQLite or migrate to a managed database.
+If `ADMIN_PASSWORD` is not configured, the admin dashboard remains disabled. Never commit real secrets to GitHub. For any deployment, use HTTPS, keep Flask debug mode off, configure a strong `SECRET_KEY`, and ensure `DATA_DIR` points to persistent storage. For a larger production workload, migrate SQLite to a managed database.
 
 ## Project structure
 
