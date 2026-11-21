@@ -136,7 +136,7 @@ def checkout():
         customer = request.form.get("customer", "").strip()
         phone = request.form.get("phone", "").strip()
         address = request.form.get("address", "").strip()
-        if (not customer or len(customer) > 80 or not re.fullmatch(r"[0-9+()\\-\\s]{7,20}", phone)
+        if (not customer or len(customer) > 80 or not re.fullmatch(r"[0-9+() -]{7,20}", phone)
                 or not address or len(address) > 500):
             flash("Enter a name (up to 80 characters), a valid phone number and an address (up to 500 characters).")
             return render_template("checkout.html", items=items, total=total)
