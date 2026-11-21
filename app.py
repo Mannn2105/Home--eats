@@ -8,7 +8,9 @@ from pathlib import Path
 from flask import Flask, render_template, request, redirect, url_for, session, flash, abort
 
 BASE_DIR = Path(__file__).resolve().parent
-DB_PATH = BASE_DIR / "homeeats.db"
+DATA_DIR = Path(os.environ.get("DATA_DIR", BASE_DIR / "data"))
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+DB_PATH = DATA_DIR / "homeeats.db"
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY") or secrets.token_hex(32)
 app.config.update(
