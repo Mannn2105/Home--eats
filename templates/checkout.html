@@ -4,28 +4,22 @@
 <section class="page-intro">
   <span class="eyebrow">ONE LAST STEP</span>
   <h1>Delivery <em>details.</em></h1>
-  <p>Choose how you want to pay. This checkout is a safe, simulated portfolio demo.</p>
+  <p>Choose a secure online payment with Razorpay or pay by Cash on Delivery.</p>
 </section>
 <div class="checkout-layout">
   <form class="checkout-form" method="post">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <label>Your name<input name="customer" required maxlength="80" placeholder="Enter your name"></label>
-    <label>Phone number<input name="phone" required type="tel" maxlength="20" placeholder="Enter your phone number"></label>
-    <label>Delivery address<textarea name="address" required rows="4" maxlength="500" placeholder="House / flat, street, area, city"></textarea></label>
+    <label>Your name<input name="customer" required maxlength="80" placeholder="Enter your name" value="{{ request.form.get('customer', '') }}"></label>
+    <label>Phone number<input name="phone" required type="tel" maxlength="20" placeholder="Enter your phone number" value="{{ request.form.get('phone', '') }}"></label>
+    <label>Delivery address<textarea name="address" required rows="4" maxlength="500" placeholder="House / flat, street, area, city">{{ request.form.get('address', '') }}</textarea></label>
 
     <fieldset class="payment-options">
       <legend>Choose a payment method</legend>
       <label class="payment-option">
-        <input type="radio" name="payment_method" value="upi_demo" checked>
+        <input type="radio" name="payment_method" value="razorpay" checked>
         <span class="payment-icon">↗</span>
-        <span><b>UPI</b><small>Simulated UPI payment</small></span>
-        <span class="payment-pill">DEMO</span>
-      </label>
-      <label class="payment-option">
-        <input type="radio" name="payment_method" value="card_demo">
-        <span class="payment-icon">▤</span>
-        <span><b>Debit / Credit Card</b><small>Simulated card payment</small></span>
-        <span class="payment-pill">DEMO</span>
+        <span><b>Pay Online</b><small>UPI, debit / credit cards and netbanking</small></span>
+        <span class="payment-pill">RAZORPAY</span>
       </label>
       <label class="payment-option">
         <input type="radio" name="payment_method" value="cod">
@@ -33,8 +27,8 @@
         <span><b>Cash on Delivery</b><small>Pay when your order arrives</small></span>
       </label>
     </fieldset>
-    <div class="demo-payment-note"><b>Demo mode:</b> No UPI PIN, card number, CVV or bank details are requested. No real payment is initiated or collected.</div>
-    <button class="btn" type="submit">Place demo order · ₹{{ total }}</button>
+    <div class="demo-payment-note"><b>Secure checkout:</b> Online payments are handled by Razorpay. HomeEats does not collect or store your card number, CVV or UPI PIN. Test Mode payments do not move real money.</div>
+    <button class="btn" type="submit">Continue to payment · ₹{{ total }}</button>
   </form>
   <aside class="order-summary">
     <h3>Order summary</h3>
@@ -42,7 +36,41 @@
     <div class="summary-row"><span>{{ item.name }} × {{ item.qty }}</span><b>₹{{ item.subtotal }}</b></div>
     {% endfor %}
     <div class="summary-total"><span>Total</span><b>₹{{ total }}</b></div>
-    <small>Final receipt will show your selected payment method and demo transaction reference.</small>
+    <small>Your receipt will show the confirmed payment status and transaction reference.</small>
   </aside>
 </div>
+{% if razorpay_options %}
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script>
+  (function () {
+    const options = {{ razorpay_options|tojson }};
+    options.handler = function (response) {
+      const form = document.createElement("form");
+      form.method = "POST";
+      form.action = {{ url_for('verify_payment')|tojson }};
+      const values = {
+        csrf_token: {{ csrf_token()|tojson }},
+        razorpay_payment_id: response.razorpay_payment_id,
+        razorpay_order_id: response.razorpay_order_id,
+        razorpay_signature: response.razorpay_signature
+      };
+      Object.entries(values).forEach(([name, value]) => {
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = name;
+        input.value = value;
+        form.appendChild(input);
+      });
+      document.body.appendChild(form);
+      form.submit();
+    };
+    options.modal = { ondismiss: function () { /* Keep the cart available if checkout is closed. */ } };
+    const checkout = new Razorpay(options);
+    checkout.on("payment.failed", function () {
+      alert("Payment was not completed. Your cart is still available; please try again.");
+    });
+    checkout.open();
+  })();
+</script>
+{% endif %}
 {% endblock %}
