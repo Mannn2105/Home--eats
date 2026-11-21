@@ -92,6 +92,15 @@ def init_db():
 
 
 @app.context_processor
+def inject_payment_availability():
+    return {
+        "razorpay_enabled": bool(
+            os.environ.get("RAZORPAY_KEY_ID") and os.environ.get("RAZORPAY_KEY_SECRET")
+        )
+    }
+
+
+@app.context_processor
 def inject_csrf_token():
     def csrf_token():
         token = session.get("_csrf_token")
