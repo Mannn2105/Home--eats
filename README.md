@@ -82,8 +82,11 @@ flowchart TD
     F --> H[Home and menu routes]
     F --> C[Cart and checkout routes]
     C --> V[Server-side validation and CSRF]
-    V --> P[Demo payment simulator]
+    V --> P[Razorpay Orders API / COD]
     P --> O[(SQLite orders)]
+    P --> Q[Razorpay Checkout]
+    Q --> S[Signature and captured-payment verification]
+    S --> O
     O --> R[Token-protected receipt]
     A[Admin] -->|Password-protected session| D[Admin dashboard]
     D --> O
