@@ -123,6 +123,16 @@ class HomeEatsTests(unittest.TestCase):
         with homeeats.db() as conn:
             self.assertEqual(conn.execute("SELECT COUNT(*) FROM orders").fetchone()[0], 0)
 
+    def test_live_razorpay_keys_are_rejected_in_test_only_build(self):
+        self.add_thali()
+        os.environ["RAZORPAY_KEY_ID"] = "rzp_live_not_allowed"
+        os.environ["RAZORPAY_KEY_SECRET"] = "test-secret"
+        response = self.submit_checkout("razorpay")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Online payments are temporarily unavailable", response.data)
+        with homeeats.db() as conn:
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM orders").fetchone()[0], 0)
+
     def test_cash_on_delivery_is_pending(self):
         self.add_thali()
         response = self.submit_checkout("cod")
