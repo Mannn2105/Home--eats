@@ -1,44 +1,92 @@
-# HomeEats — Home-Style Food Website
+# HomeEats — Homestyle Food Ordering
 
-HomeEats is a front-end web project built as part of my engineering coursework. The project explores a simple web experience around discovering home-style food.
+HomeEats is a responsive, server-rendered food discovery and ordering demo built with **Python, Flask, SQLite, HTML and CSS**. It brings a simple homestyle food catalogue, shopping cart and order workflow into one small full-stack project.
 
-> **Project status:** Front-end / academic project. This repository currently documents the project concept and its intended scope; it should not be treated as a deployed production application.
+## Features
 
-## Overview
+- Responsive landing page and menu catalogue
+- Menu categories and keyword search
+- Session-based shopping cart with quantity updates
+- Checkout form with basic validation
+- Orders persisted in SQLite
+- Optional password-protected admin dashboard to review recent orders
+- No payment processing; checkout is a portfolio/demo flow
 
-The idea behind HomeEats is to make the experience of finding home-style meals feel simple and approachable. The project was an opportunity to practise building a website with core front-end technologies.
+## Tech stack
 
-## Tech Stack
+- Python 3.10+
+- Flask
+- SQLite
+- Jinja templates
+- HTML5 and CSS3
 
-- **HTML** — page structure
-- **CSS** — styling and layout
-- **JavaScript** — client-side interactions
+## Run locally
 
-## What I Practised
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/Mannn2105/Home--eats.git
+   cd Home--eats
+   ```
+2. Create and activate a virtual environment:
+   ```bash
+   python -m venv .venv
+   # Windows
+   .venv\Scripts\activate
+   # macOS / Linux
+   source .venv/bin/activate
+   ```
+3. Install dependencies and start the app:
+   ```bash
+   pip install -r requirements.txt
+   python app.py
+   ```
+4. Open http://127.0.0.1:5000
 
-- Structuring web pages with semantic HTML
-- Styling layouts and components with CSS
-- Adding basic browser-side behaviour with JavaScript
-- Organising and presenting a small academic web project
+The SQLite database is created automatically as `homeeats.db` on first run.
 
-## Running the Project
+## Admin dashboard
 
-1. Clone this repository:
-   `git clone https://github.com/Mannn2105/Home--eats.git`
-2. Open the project folder.
-3. Open the main HTML file in your browser.
+Set an environment variable named `ADMIN_PASSWORD` before starting the app to enable the dashboard at `/admin`.
 
-If the project is expanded with a backend or database in the future, setup instructions will be added here.
+Windows PowerShell:
+```powershell
+$env:ADMIN_PASSWORD="choose-a-strong-password"
+$env:SECRET_KEY="replace-with-a-long-random-secret"
+python app.py
+```
 
-## Future Improvements
+macOS / Linux:
+```bash
+export ADMIN_PASSWORD="choose-a-strong-password"
+export SECRET_KEY="replace-with-a-long-random-secret"
+python app.py
+```
 
-- Refine the responsive layout for mobile and desktop
-- Improve accessibility and form validation
-- Add a backend and database if the project scope requires user accounts or order management
-- Add screenshots and a short demo once the current interface is available
+If `ADMIN_PASSWORD` is not configured, the admin dashboard remains disabled. Never commit real secrets to GitHub. For a public deployment, configure a strong `SECRET_KEY`, disable Flask debug mode, use HTTPS, and configure persistent storage for SQLite or migrate to a managed database.
 
-## About
+## Project structure
 
-Created by **Mannn2105** as an academic front-end project.
+```text
+Home--eats/
+├── app.py
+├── requirements.txt
+├── static/
+│   └── style.css
+└── templates/
+    ├── base.html
+    ├── index.html
+    ├── menu.html
+    ├── cart.html
+    ├── checkout.html
+    ├── success.html
+    ├── admin_login.html
+    └── admin.html
+```
 
-- GitHub: [@Mannn2105](https://github.com/Mannn2105)
+## Notes and limitations
+
+This is an educational portfolio project, not a production food-delivery platform. It does not process payments, send notifications, provide customer accounts, or integrate live restaurant inventory. Customer/order data is stored locally in SQLite. Add CSRF protection, stronger validation, rate limiting, production session settings and a managed database before exposing it to real customers.
+
+## Author
+
+Built by [@Mannn2105](https://github.com/Mannn2105).
