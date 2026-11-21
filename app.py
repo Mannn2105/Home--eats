@@ -8,6 +8,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from flask import Flask, abort, flash, redirect, render_template, request, session, url_for
+import razorpay
 
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = Path(os.environ.get("DATA_DIR", BASE_DIR / "data"))
@@ -24,8 +25,7 @@ app.config.update(
 )
 
 PAYMENT_METHODS = {
-    "upi_demo": "UPI (Demo)",
-    "card_demo": "Card (Demo)",
+    "razorpay": "Razorpay (UPI / Cards / Netbanking)",
     "cod": "Cash on Delivery",
 }
 
@@ -70,7 +70,9 @@ def init_db():
             payment_status TEXT NOT NULL DEFAULT 'Demo order',
             transaction_id TEXT,
             receipt_token TEXT,
-            items_json TEXT NOT NULL DEFAULT '[]'
+            items_json TEXT NOT NULL DEFAULT '[]',
+            gateway_order_id TEXT,
+            gateway_payment_id TEXT
         )""")
         existing = {row["name"] for row in conn.execute("PRAGMA table_info(orders)")}
         migrations = {
@@ -79,6 +81,8 @@ def init_db():
             "transaction_id": "ALTER TABLE orders ADD COLUMN transaction_id TEXT",
             "receipt_token": "ALTER TABLE orders ADD COLUMN receipt_token TEXT",
             "items_json": "ALTER TABLE orders ADD COLUMN items_json TEXT NOT NULL DEFAULT '[]'",
+            "gateway_order_id": "ALTER TABLE orders ADD COLUMN gateway_order_id TEXT",
+            "gateway_payment_id": "ALTER TABLE orders ADD COLUMN gateway_payment_id TEXT",
         }
         for column, statement in migrations.items():
             if column not in existing:
@@ -197,18 +201,8 @@ def checkout():
             flash("Enter a name (up to 80 characters), a valid phone number and an address (up to 500 characters).")
             return render_template("checkout.html", items=items, total=total)
         if payment_key not in PAYMENT_METHODS:
-            flash("Choose one of the available demo payment methods.")
+            flash("Choose Razorpay or Cash on Delivery.")
             return render_template("checkout.html", items=items, total=total)
-
-        payment_method = PAYMENT_METHODS[payment_key]
-        receipt_token = secrets.token_urlsafe(24)
-        reference_suffix = secrets.token_hex(5).upper()
-        if payment_key == "cod":
-            payment_status = "Payment due on delivery"
-            transaction_id = f"COD-{reference_suffix}"
-        else:
-            payment_status = "Demo payment successful — no money moved"
-            transaction_id = f"DEMO-{payment_key.replace('_demo', '').upper()}-{reference_suffix}"
 
         summary = "; ".join(f'{item["name"]} x{item["qty"]}' for item in items)
         items_json = json.dumps(
@@ -216,21 +210,122 @@ def checkout():
               "subtotal": item["subtotal"]} for item in items],
             ensure_ascii=False,
         )
-        with db() as conn:
-            cursor = conn.execute(
-                """INSERT INTO orders
-                   (customer, phone, address, items, total, payment_method,
-                    payment_status, transaction_id, receipt_token, items_json)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (customer, phone, address, summary, total, payment_method,
-                 payment_status, transaction_id, receipt_token, items_json),
-            )
-            order_id = cursor.lastrowid
+        receipt_token = secrets.token_urlsafe(24)
 
-        session["cart"] = {}
-        return redirect(url_for("receipt", order_id=order_id, token=receipt_token))
+        if payment_key == "cod":
+            transaction_id = f"COD-{secrets.token_hex(5).upper()}"
+            with db() as conn:
+                cursor = conn.execute(
+                    """INSERT INTO orders
+                       (customer, phone, address, items, total, payment_method,
+                        payment_status, transaction_id, receipt_token, items_json)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (customer, phone, address, summary, total, PAYMENT_METHODS["cod"],
+                     "Payment due on delivery", transaction_id, receipt_token, items_json),
+                )
+                order_id = cursor.lastrowid
+            session["cart"] = {}
+            return redirect(url_for("receipt", order_id=order_id, token=receipt_token))
+
+        key_id = os.environ.get("RAZORPAY_KEY_ID")
+        key_secret = os.environ.get("RAZORPAY_KEY_SECRET")
+        if not key_id or not key_secret:
+            flash("Online payments are temporarily unavailable. Please choose Cash on Delivery.")
+            return render_template("checkout.html", items=items, total=total)
+
+        try:
+            client = razorpay.Client(auth=(key_id, key_secret))
+            gateway_order = client.order.create(data={
+                "amount": int(total * 100),
+                "currency": "INR",
+                "receipt": f"homeeats-{secrets.token_hex(8)}",
+                "notes": {"customer": customer[:80], "phone": phone[:20]},
+            })
+            gateway_order_id = gateway_order["id"]
+            with db() as conn:
+                conn.execute(
+                    """INSERT INTO orders
+                       (customer, phone, address, items, total, payment_method,
+                        payment_status, receipt_token, items_json, gateway_order_id)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (customer, phone, address, summary, total, PAYMENT_METHODS["razorpay"],
+                     "Payment pending", receipt_token, items_json, gateway_order_id),
+                )
+            options = {
+                "key": key_id,
+                "amount": int(total * 100),
+                "currency": "INR",
+                "name": "HomeEats",
+                "description": "Home-cooked meal order",
+                "order_id": gateway_order_id,
+                "prefill": {"name": customer, "contact": phone},
+                "theme": {"color": "#355b45"},
+            }
+            return render_template(
+                "checkout.html", items=items, total=total,
+                razorpay_options=options,
+            )
+        except Exception:
+            app.logger.exception("Razorpay order creation failed")
+            flash("We couldn't start the payment. Your cart is safe; please try again or choose Cash on Delivery.")
+            return render_template("checkout.html", items=items, total=total)
 
     return render_template("checkout.html", items=items, total=total)
+
+
+@app.post("/payment/verify")
+def verify_payment():
+    key_id = os.environ.get("RAZORPAY_KEY_ID")
+    key_secret = os.environ.get("RAZORPAY_KEY_SECRET")
+    gateway_order_id = request.form.get("razorpay_order_id", "")
+    payment_id = request.form.get("razorpay_payment_id", "")
+    signature = request.form.get("razorpay_signature", "")
+    if not key_id or not key_secret or not gateway_order_id or not payment_id or not signature:
+        abort(400, description="Payment verification details are incomplete.")
+
+    with db() as conn:
+        order = conn.execute(
+            "SELECT * FROM orders WHERE gateway_order_id = ?", (gateway_order_id,)
+        ).fetchone()
+    if not order or order["payment_status"] == "Paid":
+        abort(400, description="This payment order is invalid or already processed.")
+
+    try:
+        client = razorpay.Client(auth=(key_id, key_secret))
+        client.utility.verify_payment_signature({
+            "razorpay_order_id": gateway_order_id,
+            "razorpay_payment_id": payment_id,
+            "razorpay_signature": signature,
+        })
+        payment = client.payment.fetch(payment_id)
+        expected_amount = int(round(float(order["total"]) * 100))
+        if (payment.get("order_id") != gateway_order_id
+                or int(payment.get("amount", -1)) != expected_amount
+                or payment.get("currency") != "INR"):
+            abort(400, description="Payment details do not match this order.")
+        if payment.get("status") == "authorized":
+            client.payment.capture(payment_id, expected_amount)
+            payment = client.payment.fetch(payment_id)
+        if payment.get("status") != "captured":
+            flash("Payment has not been captured yet. Please contact support before retrying.")
+            return redirect(url_for("checkout"))
+
+        with db() as conn:
+            conn.execute(
+                """UPDATE orders SET payment_status = ?, transaction_id = ?,
+                   gateway_payment_id = ? WHERE id = ? AND gateway_order_id = ?""",
+                ("Paid", payment_id, payment_id, order["id"], gateway_order_id),
+            )
+        session["cart"] = {}
+        return redirect(url_for(
+            "receipt", order_id=order["id"], token=order["receipt_token"]
+        ))
+    except razorpay.errors.SignatureVerificationError:
+        abort(400, description="Payment signature verification failed.")
+    except Exception:
+        app.logger.exception("Razorpay payment verification failed")
+        flash("We couldn't confirm this payment. Please contact support with your payment reference.")
+        return redirect(url_for("checkout"))
 
 
 @app.route("/receipt/<int:order_id>/<token>")
