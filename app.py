@@ -30,14 +30,14 @@ PAYMENT_METHODS = {
 }
 
 MENU = [
-    {"id": 1, "name": "Gujarati Thali", "category": "Meals", "description": "Rotli, shaak, dal, rice and a little sweetness.", "price": 149, "emoji": "🍱", "tag": "Bestseller"},
-    {"id": 2, "name": "Punjabi Chole Bowl", "category": "Meals", "description": "Slow-cooked chole with jeera rice and salad.", "price": 129, "emoji": "🥘", "tag": "Comfort food"},
-    {"id": 3, "name": "Paneer Wrap", "category": "Quick Bites", "description": "Spiced paneer, crunchy vegetables and mint chutney.", "price": 99, "emoji": "🌯", "tag": "Popular"},
-    {"id": 4, "name": "Masala Khichdi", "category": "Meals", "description": "Homestyle moong dal khichdi with kadhi.", "price": 109, "emoji": "🍲", "tag": "Homestyle"},
-    {"id": 5, "name": "Veg Sandwich", "category": "Quick Bites", "description": "Toasted sandwich with fresh vegetables and cheese.", "price": 79, "emoji": "🥪", "tag": ""},
-    {"id": 6, "name": "Mango Lassi", "category": "Drinks", "description": "Chilled yoghurt drink blended with mango.", "price": 59, "emoji": "🥭", "tag": ""},
-    {"id": 7, "name": "Gulab Jamun", "category": "Desserts", "description": "Two soft, syrup-soaked festive favourites.", "price": 49, "emoji": "🍮", "tag": ""},
-    {"id": 8, "name": "Masala Chaas", "category": "Drinks", "description": "Refreshing spiced buttermilk.", "price": 35, "emoji": "🥛", "tag": "Refreshing"},
+    {"id": 1, "name": "Gujarati Thali", "category": "Meals", "description": "Rotli, shaak, dal, rice and a little sweetness.", "price": 149, "emoji": "🍱", "tag": "Bestseller", "image_url": "https://images.unsplash.com/photo-1794468507547-1c193172d3c2?auto=format&fit=crop&w=900&q=85"},
+    {"id": 2, "name": "Punjabi Chole Bowl", "category": "Meals", "description": "Slow-cooked chole with jeera rice and salad.", "price": 129, "emoji": "🥘", "tag": "Comfort food", "image_url": "https://images.unsplash.com/photo-1788601988466-9f361c34c6cb?auto=format&fit=crop&w=900&q=85"},
+    {"id": 3, "name": "Paneer Wrap", "category": "Quick Bites", "description": "Spiced paneer, crunchy vegetables and mint chutney.", "price": 99, "emoji": "🌯", "tag": "Popular", "image_url": "https://images.unsplash.com/photo-1639744093483-86714cd62a3b?auto=format&fit=crop&w=900&q=85"},
+    {"id": 4, "name": "Masala Khichdi", "category": "Meals", "description": "Homestyle moong dal khichdi with kadhi.", "price": 109, "emoji": "🍲", "tag": "Homestyle", "image_url": "https://images.unsplash.com/photo-1789994405563-b372d9a270c2?auto=format&fit=crop&w=900&q=85"},
+    {"id": 5, "name": "Veg Sandwich", "category": "Quick Bites", "description": "Toasted sandwich with fresh vegetables and cheese.", "price": 79, "emoji": "🥪", "tag": "", "image_url": "https://images.unsplash.com/photo-1716535233357-822bcc293573?auto=format&fit=crop&w=900&q=85"},
+    {"id": 6, "name": "Mango Lassi", "category": "Drinks", "description": "Chilled yoghurt drink blended with mango.", "price": 59, "emoji": "🥭", "tag": "", "image_url": "https://images.unsplash.com/photo-1697642452436-9c40773cbcbb?auto=format&fit=crop&w=900&q=85"},
+    {"id": 7, "name": "Gulab Jamun", "category": "Desserts", "description": "Two soft, syrup-soaked festive favourites.", "price": 49, "emoji": "🍮", "tag": "", "image_url": "https://images.unsplash.com/photo-1593701461250-d7b22dfd3a77?auto=format&fit=crop&w=900&q=85"},
+    {"id": 8, "name": "Masala Chaas", "category": "Drinks", "description": "Refreshing spiced buttermilk.", "price": 35, "emoji": "🥛", "tag": "Refreshing", "image_url": "https://images.unsplash.com/photo-1697642452436-9c40773cbcbb?auto=format&fit=crop&w=900&q=85"}
 ]
 
 
