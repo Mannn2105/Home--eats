@@ -4,7 +4,7 @@
 <section class="page-intro">
   <span class="eyebrow">ONE LAST STEP</span>
   <h1>Delivery <em>details.</em></h1>
-  <p>Choose a secure online payment with Razorpay or pay by Cash on Delivery.</p>
+  <p>{% if razorpay_enabled %}Choose a secure online payment with Razorpay or pay by Cash on Delivery.{% else %}Online payment is temporarily unavailable. You can still place an order with Cash on Delivery.{% endif %}</p>
 </section>
 <div class="checkout-layout">
   <form class="checkout-form" method="post">
@@ -15,19 +15,25 @@
 
     <fieldset class="payment-options">
       <legend>Choose a payment method</legend>
+      {% if razorpay_enabled %}
       <label class="payment-option">
         <input type="radio" name="payment_method" value="razorpay" checked>
         <span class="payment-icon">↗</span>
         <span><b>Pay Online</b><small>UPI, debit / credit cards and netbanking</small></span>
         <span class="payment-pill">RAZORPAY</span>
       </label>
+      {% endif %}
       <label class="payment-option">
-        <input type="radio" name="payment_method" value="cod">
+        <input type="radio" name="payment_method" value="cod" {% if not razorpay_enabled %}checked{% endif %}>
         <span class="payment-icon">₹</span>
         <span><b>Cash on Delivery</b><small>Pay when your order arrives</small></span>
       </label>
     </fieldset>
+    {% if razorpay_enabled %}
     <div class="demo-payment-note"><b>Secure checkout:</b> Online payments are handled by Razorpay. HomeEats does not collect or store your card number, CVV or UPI PIN. Test Mode payments do not move real money.</div>
+    {% else %}
+    <div class="demo-payment-note"><b>Online payment unavailable:</b> Please choose Cash on Delivery or try again later.</div>
+    {% endif %}
     <button class="btn" type="submit">Continue to payment · ₹{{ total }}</button>
   </form>
   <aside class="order-summary">
