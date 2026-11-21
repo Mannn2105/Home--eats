@@ -1,4 +1,7 @@
 import os
+import re
+import hmac
+import secrets
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
@@ -7,7 +10,31 @@ from flask import Flask, render_template, request, redirect, url_for, session, f
 BASE_DIR = Path(__file__).resolve().parent
 DB_PATH = BASE_DIR / "homeeats.db"
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", "dev-only-change-this-secret")
+app.secret_key = os.environ.get("SECRET_KEY") or secrets.token_hex(32)
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=os.environ.get("COOKIE_SECURE", "0") == "1",
+    MAX_CONTENT_LENGTH=1 * 1024 * 1024,
+)
+
+@app.context_processor
+def inject_csrf_token():
+    def csrf_token():
+        token = session.get("_csrf_token")
+        if not token:
+            token = secrets.token_urlsafe(32)
+            session["_csrf_token"] = token
+        return token
+    return {"csrf_token": csrf_token}
+
+@app.before_request
+def protect_post_requests():
+    if request.method == "POST":
+        submitted = request.form.get("csrf_token", "")
+        expected = session.get("_csrf_token", "")
+        if not expected or not submitted or not hmac.compare_digest(submitted, expected):
+            abort(400, description="Invalid or missing security token. Refresh the page and try again.")
 MENU = [
     {"id": 1, "name": "Gujarati Thali", "category": "Meals", "description": "Rotli, shaak, dal, rice and a little sweetness.", "price": 149, "emoji": "🍱", "tag": "Bestseller"},
     {"id": 2, "name": "Punjabi Chole Bowl", "category": "Meals", "description": "Slow-cooked chole with jeera rice and salad.", "price": 129, "emoji": "🥘", "tag": "Comfort food"},
@@ -43,7 +70,10 @@ def cart_details():
     cart = session.get("cart", {})
     items, total = [], 0
     for item in MENU:
-        qty = int(cart.get(str(item["id"]), 0))
+        try:
+            qty = max(0, min(int(cart.get(str(item["id"]), 0)), 20))
+        except (TypeError, ValueError):
+            qty = 0
         if qty > 0:
             line = {**item, "qty": qty, "subtotal": qty * item["price"]}
             items.append(line)
@@ -57,7 +87,10 @@ def home():
 @app.route("/menu")
 def menu():
     category = request.args.get("category", "All")
-    q = request.args.get("q", "").strip().lower()
+    allowed_categories = {"All", "Meals", "Quick Bites", "Drinks", "Desserts"}
+    if category not in allowed_categories:
+        category = "All"
+    q = request.args.get("q", "").strip().lower()[:80]
     shown = [m for m in MENU if (category == "All" or m["category"] == category)
              and (not q or q in m["name"].lower() or q in m["description"].lower())]
     return render_template("menu.html", items=shown, categories=["All", "Meals", "Quick Bites", "Drinks", "Desserts"], selected=category, q=request.args.get("q", ""))
@@ -103,8 +136,9 @@ def checkout():
         customer = request.form.get("customer", "").strip()
         phone = request.form.get("phone", "").strip()
         address = request.form.get("address", "").strip()
-        if not customer or not phone or not address:
-            flash("Please complete all delivery details.")
+        if (not customer or len(customer) > 80 or not re.fullmatch(r"[0-9+()\\-\\s]{7,20}", phone)
+                or not address or len(address) > 500):
+            flash("Enter a name (up to 80 characters), a valid phone number and an address (up to 500 characters).")
             return render_template("checkout.html", items=items, total=total)
         summary = "; ".join(f'{i["name"]} x{i["qty"]}' for i in items)
         with db() as conn:
@@ -122,6 +156,7 @@ def admin():
         return "Admin dashboard is disabled. Set ADMIN_PASSWORD in your environment.", 503
     if request.method == "POST":
         if request.form.get("password") == password:
+            session.clear()
             session["admin"] = True
             return redirect(url_for("admin"))
         flash("Incorrect password.")
