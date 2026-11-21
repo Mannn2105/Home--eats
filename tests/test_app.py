@@ -1,8 +1,10 @@
 import json
+import os
 import re
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import Mock, patch
 
 import app as homeeats
 
@@ -17,6 +19,8 @@ class HomeEatsTests(unittest.TestCase):
 
     def tearDown(self):
         self.temp_dir.cleanup()
+        os.environ.pop("RAZORPAY_KEY_ID", None)
+        os.environ.pop("RAZORPAY_KEY_SECRET", None)
 
     def csrf(self, path):
         response = self.client.get(path)
@@ -29,7 +33,7 @@ class HomeEatsTests(unittest.TestCase):
         response = self.client.post("/cart/add/1", data={"csrf_token": token}, follow_redirects=True)
         self.assertEqual(response.status_code, 200)
 
-    def submit_checkout(self, payment_method="upi_demo"):
+    def submit_checkout(self, payment_method="cod"):
         token = self.csrf("/checkout")
         return self.client.post("/checkout", data={
             "csrf_token": token,
@@ -65,29 +69,59 @@ class HomeEatsTests(unittest.TestCase):
         response = self.client.post("/cart/add/999", data={"csrf_token": token})
         self.assertEqual(response.status_code, 404)
 
-    def test_demo_upi_payment_creates_receipt(self):
+    def test_razorpay_checkout_creates_pending_gateway_order(self):
         self.add_thali()
-        response = self.submit_checkout("upi_demo")
+        os.environ["RAZORPAY_KEY_ID"] = "rzp_test_example"
+        os.environ["RAZORPAY_KEY_SECRET"] = "test-secret"
+        gateway = Mock()
+        gateway.order.create.return_value = {"id": "order_test_123"}
+        with patch.object(homeeats.razorpay, "Client", return_value=gateway):
+            response = self.submit_checkout("razorpay")
         self.assertEqual(response.status_code, 200)
-        self.assertIn(b"PAYMENT RECEIPT", response.data)
-        self.assertIn(b"UPI (Demo)", response.data)
-        self.assertIn(b"Demo payment successful", response.data)
-        self.assertIn(b"DEMO-UPI-", response.data)
-        self.assertIn(b"Gujarati Thali", response.data)
+        self.assertIn(b"checkout.razorpay.com/v1/checkout.js", response.data)
+        self.assertIn(b"order_test_123", response.data)
         with homeeats.db() as conn:
             order = conn.execute("SELECT * FROM orders").fetchone()
+        self.assertEqual(order["payment_status"], "Payment pending")
+        self.assertEqual(order["gateway_order_id"], "order_test_123")
         self.assertEqual(order["total"], 149)
-        self.assertEqual(order["payment_method"], "UPI (Demo)")
-        self.assertTrue(order["receipt_token"])
         self.assertEqual(json.loads(order["items_json"])[0]["name"], "Gujarati Thali")
 
-    def test_demo_card_payment_is_labelled_as_simulated(self):
+    def test_razorpay_payment_is_signature_and_capture_verified(self):
         self.add_thali()
-        response = self.submit_checkout("card_demo")
+        os.environ["RAZORPAY_KEY_ID"] = "rzp_test_example"
+        os.environ["RAZORPAY_KEY_SECRET"] = "test-secret"
+        gateway = Mock()
+        gateway.order.create.return_value = {"id": "order_test_123"}
+        gateway.payment.fetch.return_value = {
+            "id": "pay_test_123", "order_id": "order_test_123",
+            "amount": 14900, "currency": "INR", "status": "captured",
+        }
+        with patch.object(homeeats.razorpay, "Client", return_value=gateway):
+            self.submit_checkout("razorpay")
+            token = self.csrf("/checkout")
+            response = self.client.post("/payment/verify", data={
+                "csrf_token": token,
+                "razorpay_order_id": "order_test_123",
+                "razorpay_payment_id": "pay_test_123",
+                "razorpay_signature": "valid-test-signature",
+            }, follow_redirects=True)
         self.assertEqual(response.status_code, 200)
-        self.assertIn(b"Card (Demo)", response.data)
-        self.assertIn(b"DEMO-CARD-", response.data)
-        self.assertIn(b"no money moved", response.data)
+        self.assertIn(b"PAYMENT CONFIRMED", response.data)
+        self.assertIn(b"Payment was processed and verified", response.data)
+        with homeeats.db() as conn:
+            order = conn.execute("SELECT * FROM orders").fetchone()
+        self.assertEqual(order["payment_status"], "Paid")
+        self.assertEqual(order["gateway_payment_id"], "pay_test_123")
+        gateway.utility.verify_payment_signature.assert_called_once()
+
+    def test_razorpay_unavailable_without_credentials(self):
+        self.add_thali()
+        response = self.submit_checkout("razorpay")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Online payments are temporarily unavailable", response.data)
+        with homeeats.db() as conn:
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM orders").fetchone()[0], 0)
 
     def test_cash_on_delivery_is_pending(self):
         self.add_thali()
@@ -99,7 +133,7 @@ class HomeEatsTests(unittest.TestCase):
 
     def test_receipt_link_is_protected_by_random_token(self):
         self.add_thali()
-        self.submit_checkout("upi_demo")
+        self.submit_checkout("cod")
         with homeeats.db() as conn:
             order = conn.execute("SELECT id, receipt_token FROM orders").fetchone()
         bad = self.client.get(f"/receipt/{order['id']}/wrong-token")
@@ -115,7 +149,7 @@ class HomeEatsTests(unittest.TestCase):
             "customer": "Test Customer",
             "phone": "not-a-phone",
             "address": "Test address",
-            "payment_method": "upi_demo",
+            "payment_method": "cod",
         })
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"valid phone number", response.data)
@@ -131,7 +165,7 @@ class HomeEatsTests(unittest.TestCase):
             "payment_method": "bitcoin",
         })
         self.assertEqual(response.status_code, 200)
-        self.assertIn(b"Choose one of the available", response.data)
+        self.assertIn(b"Choose Razorpay or Cash on Delivery", response.data)
         with homeeats.db() as conn:
             self.assertEqual(conn.execute("SELECT COUNT(*) FROM orders").fetchone()[0], 0)
 
