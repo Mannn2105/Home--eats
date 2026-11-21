@@ -1,3 +1,4 @@
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -16,6 +17,12 @@ class HomeEatsTests(unittest.TestCase):
     def tearDown(self):
         self.temp_dir.cleanup()
 
+    def csrf(self, path):
+        response = self.client.get(path)
+        match = re.search(rb'name="csrf_token" value="([^"]+)"', response.data)
+        self.assertIsNotNone(match, f"CSRF token missing from {path}")
+        return match.group(1).decode()
+
     def test_home_page_renders(self):
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
@@ -28,20 +35,26 @@ class HomeEatsTests(unittest.TestCase):
         self.assertNotIn(b"Paneer Wrap", response.data)
 
     def test_add_to_cart_and_update_quantity(self):
-        response = self.client.post("/cart/add/1", follow_redirects=True)
+        token = self.csrf("/menu")
+        response = self.client.post("/cart/add/1", data={"csrf_token": token}, follow_redirects=True)
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"Gujarati Thali", response.data)
-        response = self.client.post("/cart/update", data={"1": "3"}, follow_redirects=True)
+        token = self.csrf("/cart")
+        response = self.client.post("/cart/update", data={"1": "3", "csrf_token": token}, follow_redirects=True)
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"447", response.data)
 
     def test_invalid_menu_item_returns_404(self):
-        response = self.client.post("/cart/add/999")
+        token = self.csrf("/menu")
+        response = self.client.post("/cart/add/999", data={"csrf_token": token})
         self.assertEqual(response.status_code, 404)
 
     def test_checkout_persists_order_and_clears_cart(self):
-        self.client.post("/cart/add/1")
+        token = self.csrf("/menu")
+        self.client.post("/cart/add/1", data={"csrf_token": token})
+        token = self.csrf("/checkout")
         response = self.client.post("/checkout", data={
+            "csrf_token": token,
             "customer": "Test Customer",
             "phone": "9999999999",
             "address": "Test address, Vadodara",
@@ -52,8 +65,26 @@ class HomeEatsTests(unittest.TestCase):
             order = conn.execute("SELECT customer, total FROM orders").fetchone()
         self.assertEqual(order["customer"], "Test Customer")
         self.assertEqual(order["total"], 149)
-        self.assertEqual(self.client.get("/cart").status_code, 200)
         self.assertIn(b"Your cart is waiting", self.client.get("/cart").data)
+
+    def test_checkout_rejects_invalid_phone(self):
+        token = self.csrf("/menu")
+        self.client.post("/cart/add/1", data={"csrf_token": token})
+        token = self.csrf("/checkout")
+        response = self.client.post("/checkout", data={
+            "csrf_token": token,
+            "customer": "Test Customer",
+            "phone": "not-a-phone",
+            "address": "Test address",
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"valid phone number", response.data)
+        with homeeats.db() as conn:
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM orders").fetchone()[0], 0)
+
+    def test_missing_csrf_token_is_rejected(self):
+        response = self.client.post("/cart/add/1")
+        self.assertEqual(response.status_code, 400)
 
     def test_empty_cart_cannot_checkout(self):
         response = self.client.get("/checkout", follow_redirects=True)
@@ -61,8 +92,6 @@ class HomeEatsTests(unittest.TestCase):
         self.assertIn(b"Explore the", response.data)
 
     def test_admin_is_disabled_without_password(self):
-        with homeeats.app.test_request_context():
-            homeeats.app.config["TESTING"] = True
         response = self.client.get("/admin")
         self.assertEqual(response.status_code, 503)
 
