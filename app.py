@@ -95,7 +95,8 @@ def init_db():
 def inject_payment_availability():
     return {
         "razorpay_enabled": bool(
-            os.environ.get("RAZORPAY_KEY_ID") and os.environ.get("RAZORPAY_KEY_SECRET")
+            os.environ.get("RAZORPAY_KEY_ID", "").startswith("rzp_test_")
+            and os.environ.get("RAZORPAY_KEY_SECRET")
         )
     }
 
@@ -239,7 +240,7 @@ def checkout():
 
         key_id = os.environ.get("RAZORPAY_KEY_ID")
         key_secret = os.environ.get("RAZORPAY_KEY_SECRET")
-        if not key_id or not key_secret:
+        if not key_id or not key_id.startswith("rzp_test_") or not key_secret:
             flash("Online payments are temporarily unavailable. Please choose Cash on Delivery.")
             return render_template("checkout.html", items=items, total=total)
 
@@ -290,7 +291,8 @@ def verify_payment():
     gateway_order_id = request.form.get("razorpay_order_id", "")
     payment_id = request.form.get("razorpay_payment_id", "")
     signature = request.form.get("razorpay_signature", "")
-    if not key_id or not key_secret or not gateway_order_id or not payment_id or not signature:
+    if (not key_id or not key_id.startswith("rzp_test_") or not key_secret
+            or not gateway_order_id or not payment_id or not signature):
         abort(400, description="Payment verification details are incomplete.")
 
     with db() as conn:
